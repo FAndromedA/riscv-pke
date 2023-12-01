@@ -208,4 +208,7 @@ struct dentry *lookup_final_dentry(const char *path, struct dentry **parent,
                                    char *miss_name);
 void get_base_name(const char *path, char *base_name);
 
+//added in lab4_challenge1
+void vfs_get_cwd(char* path);
+
 #endif

@@ -75,12 +75,12 @@ char *strchr(const char *p, int ch)
 }
 
 char* strtok(char* str, const char* delim) {
-  static char* current;
+  static char* current;//注意有static
   if (str != NULL) current = str;
   if (current == NULL) return NULL;
 
   char* start = current;
-  while (*start != '\0' && strchr(delim, *start) != NULL) start++;
+  while (*start != '\0' && strchr(delim, *start) != NULL) start++;//是分隔符集合中的一个，直到\0或者不是分隔符
 
   if (*start == '\0') {
     current = NULL;
@@ -88,7 +88,7 @@ char* strtok(char* str, const char* delim) {
   }
 
   char* end = start;
-  while (*end != '\0' && strchr(delim, *end) == NULL) end++;
+  while (*end != '\0' && strchr(delim, *end) == NULL) end++;//不是分隔符中的一个，直到\0或分隔符停
 
   if (*end != '\0') {
     *end = '\0';

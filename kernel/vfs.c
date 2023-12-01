@@ -502,6 +502,9 @@ int vfs_closedir(struct file *file) {
   return 0;
 }
 
+//added in lab4_challenge1
+#include "process.h"
+
 //
 // lookup the "path" and return its dentry (or NULL if not found).
 // the lookup starts from parent, and stop till the full "path" is parsed.
@@ -520,42 +523,57 @@ struct dentry *lookup_final_dentry(const char *path, struct dentry **parent,
   // at its three continuous invocations.
   char *token = strtok(path_copy, "/");
   struct dentry *this = *parent;
+  if (strcmp(token, ".") == 0 || strcmp(token, "..") == 0) {
+    this = current->pfiles->cwd;
+  }
 
   while (token != NULL) {
     *parent = this;
-    this = hash_get_dentry((*parent), token);  // try hash first
-    if (this == NULL) {
-      // if not found in hash, try to find it in the directory
-      this = alloc_vfs_dentry(token, NULL, *parent);
-      // lookup subfolder/file in its parent directory. note:
-      // hostfs and rfs will take different procedures for lookup.
-      struct vinode *found_vinode = viop_lookup((*parent)->dentry_inode, this);
-      if (found_vinode == NULL) {
-        // not found in both hash table and directory file on disk.
-        free_page(this);
-        strcpy(miss_name, token);
-        return NULL;
-      }
-
-      struct vinode *same_inode = hash_get_vinode(found_vinode->sb, found_vinode->inum);
-      if (same_inode != NULL) {
-        // the vinode is already in the hash table (i.e. we are opening another hard link)
-        this->dentry_inode = same_inode;
-        same_inode->ref++;
-        free_page(found_vinode);
-      } else {
-        // the vinode is not in the hash table
-        this->dentry_inode = found_vinode;
-        found_vinode->ref++;
-        hash_put_vinode(found_vinode);
-      }
-
-      hash_put_dentry(this);
+    //sprint("%s\n", token);
+    if (strcmp(token, ".") == 0) {
+      // do nothing
     }
+    else if (strcmp(token, "..") == 0) {
+      this = this->parent;
+    }
+    else {
+      // sprint("token:%s\n", token);
+      this = hash_get_dentry((*parent), token);  // try hash first
+      if (this == NULL) {
+        // if not found in hash, try to find it in the directory
+        this = alloc_vfs_dentry(token, NULL, *parent);
+        // lookup subfolder/file in its parent directory. note:
+        // hostfs and rfs will take different procedures for lookup.
+        struct vinode *found_vinode = viop_lookup((*parent)->dentry_inode, this);
+        if (found_vinode == NULL) {
+          // not found in both hash table and directory file on disk.
+          free_page(this);
+          strcpy(miss_name, token);
+          return NULL;
+        }
+
+        struct vinode *same_inode = hash_get_vinode(found_vinode->sb, found_vinode->inum);
+        if (same_inode != NULL) {
+          // the vinode is already in the hash table (i.e. we are opening another hard link)
+          this->dentry_inode = same_inode;
+          same_inode->ref++;
+          free_page(found_vinode);
+        } else {
+          // the vinode is not in the hash table
+          this->dentry_inode = found_vinode;
+          found_vinode->ref++;
+          hash_put_vinode(found_vinode);
+        }
+
+        hash_put_dentry(this);
+      }
+    }
+    
 
     // get next token
     token = strtok(NULL, "/");
   }
+  //sprint("%s returning : %s\n",vfs_root_dentry->name, this->name);
   return this;
 }
 
@@ -721,3 +739,25 @@ struct vinode *default_alloc_vinode(struct super_block *sb) {
 }
 
 struct file_system_type *fs_list[MAX_SUPPORTED_FS];
+
+//added in lab4_challenge1
+void vfs_get_cwd(char* path) {
+  struct dentry* this = current->pfiles->cwd;
+  
+  if (this == vfs_root_dentry) {
+    memcpy(path, "/", sizeof("/"));
+    return;
+  }
+  *path = '\0';
+  while(this != vfs_root_dentry) {
+    char tmps[MAX_PATH_LEN];
+    // sprint("!!! %s\n", path);
+    tmps[0] = '/';
+    memcpy(tmps + 1, this->name, sizeof(this->name));
+    //tmps[0] = '/';
+    memcpy(tmps + strlen(this->name) + 1, path, sizeof(path));
+    memcpy(path, tmps, sizeof(tmps));
+    // sprint("%s : %s\n", tmps, path);
+    this = this->parent;
+  }
+}

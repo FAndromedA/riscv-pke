@@ -215,6 +215,29 @@ ssize_t sys_user_unlink(char * vfn){
   return do_unlink(pfn);
 }
 
+//added in lab4_challenge1
+ssize_t sys_user_rcwd(char* pathva) { // 传的虚拟地址都要转化为物理地址才能操作
+  char* pathpa = (char*)user_va_to_pa((pagetable_t)(current->pagetable), pathva);
+  vfs_get_cwd(pathpa);
+  //memcpy(pathpa, current->pfiles->cwd->name, sizeof(current->pfiles->cwd->name));
+  return 0;
+}
+
+//added in lab4_challenge1
+ssize_t sys_user_ccwd(char* pathva) {
+  char* pathpa = (char*)user_va_to_pa((pagetable_t)(current->pagetable), pathva);
+  struct dentry *parent = vfs_root_dentry;
+  char miss_name[MAX_PATH_LEN];
+  
+  struct dentry* tempDentry = lookup_final_dentry(pathpa, &parent, miss_name);
+  if (tempDentry == NULL) {
+    return -1;
+  }
+  current->pfiles->cwd = tempDentry;
+  //memcpy(current->pfiles->cwd->name, pathpa, sizeof(pathpa));
+  return 0;// success
+}
+
 //
 // [a0]: the syscall number; [a1] ... [a7]: arguments to the syscalls.
 // returns the code of success, (e.g., 0 means success, fail for otherwise)

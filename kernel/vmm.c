@@ -11,6 +11,8 @@
 #include "spike_interface/spike_utils.h"
 #include "util/functions.h"
 
+#include "user/user_lib.h"
+
 /* --- utility functions for virtual address mapping --- */
 //
 // establish mapping of virtual address [va, va+size] to phyiscal address [pa, pa+size]
@@ -186,6 +188,19 @@ void user_vm_unmap(pagetable_t page_dir, uint64 va, uint64 size, int free) {
   // (use free_page() defined in pmm.c) the physical pages. lastly, invalidate the PTEs.
   // as naive_free reclaims only one page at a time, you only need to consider one page
   // to make user/app_naive_malloc to behave correctly.
-  panic( "You have to implement user_vm_unmap to free pages using naive_free in lab2_2.\n" );
-
+  // panic( "You have to implement user_vm_unmap to free pages using naive_free in lab2_2.\n" );
+  
+  pte_t* pte = page_walk(page_dir, va, 0);
+  if (pte != NULL) {
+    void *pa = (void *)PTE2PA((uint64)*pte);
+    //void* pa = user_va_to_pa(pte_va, (void*)va);
+    if (free) {
+      free_page(pa);
+      //naive_free((void *)va);
+      //*pte_va = 0;
+      //*pte &= ~PTE_V; // set PTE_V = 0
+      *pte = PA2PTE(pa) & ~PTE_V;
+    }
+    
+  }
 }

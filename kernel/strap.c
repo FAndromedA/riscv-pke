@@ -66,7 +66,7 @@ void handle_user_page_fault(uint64 mcause, uint64 sepc, uint64 stval) {
       // virtual address that causes the page fault.
       // panic( "You need to implement the operations that actually handle the page fault in lab2_3.\n" );
       
-      if (stval < USER_STACK_TOP && stval >= USER_STACK_TOP - 20 * PGSIZE) {
+      if (stval < USER_STACK_TOP && stval >= USER_STACK_TOP - 20 * PGSIZE) { //added in lab2_challenge1
         //page_walk(current->pagetable, stval, 1);
         {
           pagetable_t pa = (pagetable_t)alloc_page();

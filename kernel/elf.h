@@ -60,4 +60,9 @@ elf_status elf_load(elf_ctx *ctx);
 
 void load_bincode_from_host_elf(process *p);
 
+//added in lab1_challenge1
+// extern elf_ctx elf_loader;
+// uint64 elf_fpread(elf_ctx *ctx, void *dest, uint64 nb, uint64 offset);
+void find_functionName(void* ip);
+
 #endif

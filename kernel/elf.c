@@ -101,6 +101,9 @@ static size_t parse_args(arg_buf *arg_bug_msg) {
   return pk_argc - arg;
 }
 
+//added in lab1_challenge1
+elf_ctx elf_loader;
+
 //
 // load the elf of user application, by using the spike file interface.
 //
@@ -132,9 +135,84 @@ void load_bincode_from_host_elf(process *p) {
 
   // entry (virtual, also physical in lab1_x) address
   p->trapframe->epc = elfloader.ehdr.entry;
-
+  //added in lab1_challenge1
+  elf_loader = elfloader;
+  //memcpy(&elf_loader, &elfloader, sizeof(elf_ctx));
   // close the host spike file
   spike_file_close( info.f );
 
   sprint("Application program entry point (virtual address): 0x%lx\n", p->trapframe->epc);
+}
+
+//added in lab1_challenge1
+void find_functionName(void* ip) {
+  elf_header ehdr = elf_loader.ehdr;
+  uint16 shstrndx = ehdr.shstrndx;
+  uint64 shoff = ehdr.shoff;
+  uint16 shentsize = ehdr.shentsize;
+  uint16 shnum = ehdr.shnum;
+
+  uint64 shstraddr = shoff + (uint64)shstrndx * shentsize;
+  uint64 shstrtab_offset ;//= *((uint64*)(shstraddr + 24));
+  uint64 shstrtab_size ;//= *((uint64*)(shstraddr + 32));
+  elf_fpread(&elf_loader, &shstrtab_offset, 8, shstraddr + 24);
+  elf_fpread(&elf_loader, &shstrtab_size, 8, shstraddr + 32);
+  
+  char shstrTableBuf[shstrtab_size];
+  //char *strTableBuf; //we implement malloc in lab2_2
+  // strTableBuf = (char *)malloc(strtab_size * sizeof(char));
+  // if (strTableBuf == NULL) {
+  //   panic("strTableBuf Memory allocation failed.\n");
+  // } 
+  elf_fpread(&elf_loader, shstrTableBuf, shstrtab_size, shstrtab_offset);
+
+  uint64 strtab_offset;
+  uint64 strtab_size;
+  for(uint16 i = 0;i < shnum;++ i) {
+    uint64 sectionP = (shoff + (uint64)i * shentsize);
+    uint32 sh_name ;//= *((uint32*)sectionP);
+    elf_fpread(&elf_loader, &sh_name, 4, sectionP);
+    char* sh_name_str = (char*)((uint64)shstrTableBuf + (uint64)sh_name);
+
+    if (strcmp(sh_name_str, ".strtab") == 0) {
+      elf_fpread(&elf_loader, &strtab_offset, 8, sectionP + 24);
+      elf_fpread(&elf_loader, &strtab_size, 8, sectionP + 32);
+    }
+  }
+  char strTableBuf[strtab_size];
+  elf_fpread(&elf_loader, strTableBuf, strtab_size, strtab_offset);
+
+  for(uint16 i = 0;i < shnum;++ i) {
+    uint64 sectionP = (shoff + (uint64)i * shentsize);
+    uint32 sh_name ;//= *((uint32*)sectionP);
+    elf_fpread(&elf_loader, &sh_name, 4, sectionP);
+    char* sh_name_str = (char*)((uint64)shstrTableBuf + (uint64)sh_name);
+    
+    if (strcmp(sh_name_str, ".symtab") == 0) {
+      uint64 syboff ;//= *((uint64*)(sectionP + 24));
+      uint64 syb_size ;//= *((uint64*)(sectionP + 32));
+      uint64 syb_entsize ;//= *((uint64*)(sectionP + 56));
+      elf_fpread(&elf_loader, &syboff, 8, sectionP + 24);
+      elf_fpread(&elf_loader, &syb_size, 8, sectionP + 32);
+      elf_fpread(&elf_loader, &syb_entsize, 8, sectionP + 56);
+
+      for(uint64 j = 0;j * syb_entsize < syb_size;++ j) {
+        uint64 syb_entaddr = syboff + j * syb_entsize;
+        uint32 st_name ;//= *((uint63*)(syb_entaddr));
+        uint64 st_value ;//= *((uint64*)(syb_entaddr + 8));
+        uint64 st_size ;//= *((uint64*)(syb_entaddr + 16));
+        elf_fpread(&elf_loader, &st_name, 4, syb_entaddr);
+        elf_fpread(&elf_loader, &st_value, 8, syb_entaddr + 8);
+        elf_fpread(&elf_loader, &st_size, 8, syb_entaddr + 16);
+        // sprint("%lld %lld %lld\n", j, syb_entsize, syb_size);
+        if ((uint64)ip >= st_value && (uint64)ip < st_value + st_size) {
+          sprint("%s\n",(char*)((uint64)strTableBuf + (uint64)st_name));
+          //free(strTableBuf);
+          //(strtab_offset + (uint64)*((uint32*)syb_entaddr))
+        }
+      }
+      //break;
+    }
+  }  
+  //free(strTableBuf);
 }

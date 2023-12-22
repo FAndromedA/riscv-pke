@@ -10,9 +10,9 @@
 #include "util/snprintf.h"
 #include "kernel/syscall.h"
 
-int do_user_call(uint64 sysnum, uint64 a1, uint64 a2, uint64 a3, uint64 a4, uint64 a5, uint64 a6,
+long do_user_call(uint64 sysnum, uint64 a1, uint64 a2, uint64 a3, uint64 a4, uint64 a5, uint64 a6,
                  uint64 a7) {
-  int ret;
+  uint64 ret;
 
   // before invoking the syscall, arguments of do_user_call are already loaded into the argument
   // registers (a0-a7) of our (emulated) risc-v machine.
@@ -48,4 +48,13 @@ int printu(const char* s, ...) {
 //
 int exit(int code) {
   return do_user_call(SYS_user_exit, code, 0, 0, 0, 0, 0, 0); 
+}
+
+// added in lab1_challenge1
+//char*
+
+// added in lab1_challenge1
+void print_backtrace(int depth) {
+  do_user_call(SYS_print_backtrace, depth, 0, 0, 0, 0, 0, 0);
+  return;
 }

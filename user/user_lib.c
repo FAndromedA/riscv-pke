@@ -12,7 +12,7 @@
 
 uint64 do_user_call(uint64 sysnum, uint64 a1, uint64 a2, uint64 a3, uint64 a4, uint64 a5, uint64 a6,
                  uint64 a7) {
-  int ret;
+  long ret;
 
   // before invoking the syscall, arguments of do_user_call are already loaded into the argument
   // registers (a0-a7) of our (emulated) risc-v machine.
@@ -75,4 +75,9 @@ int fork() {
 //
 void yield() {
   do_user_call(SYS_user_yield, 0, 0, 0, 0, 0, 0, 0);
+}
+
+//added in lab3_challenge1
+int wait(int pid) {
+  return do_user_call(SYS_user_wait, pid, 0, 0, 0, 0, 0, 0);
 }

@@ -106,4 +106,7 @@ int do_fork(process* parent);
 // current running process
 extern process* current;
 
+//added in lab3_challenge1
+int do_wait(int pid);
+
 #endif

@@ -33,6 +33,17 @@ ssize_t sys_user_print(const char* buf, size_t n) {
 //
 ssize_t sys_user_exit(uint64 code) {
   sprint("User exit with code:%d.\n", code);
+  //added in lab3_challenge1
+  if (current->parent != NULL) {
+    process* parent = current->parent;
+    if (parent->status == BLOCKED && (parent->trapframe->regs.a0 == -1 
+      || parent->trapframe->regs.a0 == current->pid)) {
+        parent->status = READY;
+        parent->trapframe->regs.a0 = current->pid;
+        insert_to_ready_queue(parent);
+      }
+  }
+
   // reclaim the current process, and reschedule. added @lab3_1
   free_process( current );
   schedule();
@@ -96,6 +107,16 @@ ssize_t sys_user_yield() {
   return 0;
 }
 
+//added in lab3_challenge1
+ssize_t sys_user_wait(int pid) {
+  int ret = do_wait(pid);
+  if (ret == -1) {
+    return -1;
+  }
+  schedule();
+  return ret; // it wont run here actually
+}
+
 //
 // [a0]: the syscall number; [a1] ... [a7]: arguments to the syscalls.
 // returns the code of success, (e.g., 0 means success, fail for otherwise)
@@ -115,6 +136,9 @@ long do_syscall(long a0, long a1, long a2, long a3, long a4, long a5, long a6, l
       return sys_user_fork();
     case SYS_user_yield:
       return sys_user_yield();
+    //added in lab3_challenge1
+    case SYS_user_wait:
+      return sys_user_wait(a1);
     default:
       panic("Unknown syscall %ld \n", a0);
   }

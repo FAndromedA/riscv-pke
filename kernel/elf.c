@@ -133,10 +133,10 @@ void make_addr_line(elf_ctx *ctx, char *debug_line, uint64 length) {
         off++; addr_line regs; regs.addr = 0; regs.file = 1; regs.line = 1;
         // simulate the state machine op code
         for (;;) {
-            uint8 op = *(off++);
+            uint8 op = *(off++); //sprint("@%d->",op);
             switch (op) {
                 case 0: // Extended Opcodes
-                    read_uleb128(NULL, &off); op = *(off++);
+                    read_uleb128(NULL, &off); op = *(off++); //sprint("#%d->",op);
                     switch (op) {
                         case 1: // DW_LNE_end_sequence
                             if (p->line_ind > 0 && p->line[p->line_ind - 1].addr == regs.addr) p->line_ind--;
@@ -338,49 +338,18 @@ void getSectionByName(const char *sectionName, uint64 *sectionOffset, uint64 *se
   panic("No corresponding section name : %s", sectionName);
 }
 
-elf_sect_header read_elf_section_header(elf_ctx *ctx, int idx) {
-  elf_sect_header sh;
-  elf_fpread(ctx, &sh, sizeof(elf_sect_header), ctx->ehdr.shoff + sizeof(elf_sect_header) * idx);
-  return sh;
-}
-
-void read_elf_into_buffer(elf_ctx *ctx, void *dst, int offset, int size) {
-  elf_fpread(ctx, dst, size, offset);
-}
-
-elf_sect_header read_elf_section_header_with_name(elf_ctx *ctx, const char *name) {
-
-  static int inited = 0;
-  static elf_sect_header shstrtab;
-  static char buf[1000];
-
-  if(!inited) {
-    shstrtab = read_elf_section_header(ctx, ctx->ehdr.shstrndx);
-    read_elf_into_buffer(ctx, buf, shstrtab.offset, shstrtab.size);
-    inited = 1;
-  }
-
-  elf_sect_header header;
-  for(int i = 0; i < ctx->ehdr.shnum; i++) {
-    header = read_elf_section_header(ctx, i);
-    if(0 == strcmp(buf + header.name, name)) {
-      return header;
-    }
-  }
-  panic("no corresponding section name");
-}
-
+//added in lab1_challenge2
 void printErrorLine() {
   uint64 debugLineOffset, debugLineSize;
   getSectionByName(".debug_line", &debugLineOffset, &debugLineSize);//debugLineSize = 2122;
-  sprint("offset = %lld size = %lld\n", debugLineOffset, debugLineSize);
+  //sprint("offset = %lld size = %lld\n", debugLineOffset, debugLineSize);
   char content[3000];//3000 
   elf_fpread(&elf_loader, content, debugLineSize, debugLineOffset);
   make_addr_line(&elf_loader, content, debugLineSize); //panic("?!");
   //sprint("%lx\n", read_csr(mepc));
 
   for(size_t i = 0;i < current->line_ind;++ i) {
-    sprint("%d : %lx ---end-->", i, current->line[i].addr);
+    //sprint("%d : %lx ---end-->", i, current->line[i].addr);
     if (current->line[i].addr == read_csr(mepc)) {
       uint64 line_number = current->line[i].line;
       uint64 file_index = current->line[i].file;
@@ -388,8 +357,38 @@ void printErrorLine() {
       uint64 dir_index = current->file[file_index].dir;
       char *dir_name = current->dir[dir_index];
       sprint("Runtime error at %s/%s:%d\n", dir_name, file_name, line_number);
-      sprint("%s\n", dir_name); break;
-      //spike_file_t* spike_code_file = spike_file_open()
+      //sprint("%s\n", dir_name); 
+      char path[100]; int path_len = 0;
+      for(size_t i = 0;i < strlen(dir_name);++ i) {
+        path[path_len ++] = dir_name[i];
+      }
+      path[path_len ++] = '/';
+      for(size_t i = 0;i < strlen(file_name);++ i) {
+        path[path_len ++] = file_name[i];
+      }
+      path[path_len] = '\0';
+      spike_file_t* spike_code_file = spike_file_open(path, O_RDONLY, 0);
+      int cur_line_no = 1;
+      ssize_t cur_offset = 0;
+      char line_content[100];
+      int line_content_len = 0;
+      while(cur_line_no < line_number) {
+        char temp;
+        while(spike_file_pread(spike_code_file, &temp, 1, cur_offset ++)) {
+          if (temp == '\n') {
+            cur_line_no ++;
+            break;
+          }
+        }
+      }
+      while(spike_file_pread(spike_code_file, &line_content[line_content_len], 1, cur_offset ++) 
+              && line_content[line_content_len] != '\n') {
+                line_content_len ++;
+      }
+      line_content[line_content_len] = '\0';
+      sprint("%s\n", line_content);
+      spike_file_close(spike_code_file);
+      break;
     }
   }
 }

@@ -37,11 +37,20 @@ void handle_mtrap() {
       handle_timer();
       break;
     case CAUSE_FETCH_ACCESS:
+      //**added in lab1_challenge2
+      printErrorLine();
+      //**
       handle_instruction_access_fault();
       break;
     case CAUSE_LOAD_ACCESS:
+      //**added in lab1_challenge2
+      printErrorLine();
+      //**
       handle_load_access_fault();
     case CAUSE_STORE_ACCESS:
+      //**added in lab1_challenge2
+      printErrorLine();
+      //**
       handle_store_access_fault();
       break;
     case CAUSE_ILLEGAL_INSTRUCTION:
@@ -55,9 +64,15 @@ void handle_mtrap() {
 
       break;
     case CAUSE_MISALIGNED_LOAD:
+      //**added in lab1_challenge2
+      printErrorLine();
+      //**
       handle_misaligned_load();
       break;
     case CAUSE_MISALIGNED_STORE:
+      //**added in lab1_challenge2
+      printErrorLine();
+      //**
       handle_misaligned_store();
       break;
 

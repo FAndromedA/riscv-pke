@@ -13,6 +13,8 @@ typedef struct elf_info_t {
   process *p;
 } elf_info;
 
+//added in lab1_challenge2
+elf_ctx elf_loader;
 //
 // the implementation of allocater. allocates memory space for later segment loading
 //
@@ -276,7 +278,7 @@ void load_bincode_from_host_elf(process *p) {
 
   // load elf. elf_load() is defined above.
   if (elf_load(&elfloader) != EL_OK) panic("Fail on loading elf.\n");
-
+  elf_loader = elfloader;// added in lab1_challenge2
   // entry (virtual, also physical in lab1_x) address
   p->trapframe->epc = elfloader.ehdr.entry;
 
@@ -284,4 +286,110 @@ void load_bincode_from_host_elf(process *p) {
   spike_file_close( info.f );
 
   sprint("Application program entry point (virtual address): 0x%lx\n", p->trapframe->epc);
+}
+
+//added in lab1_challenge2
+void getSectionByName(const char *sectionName, uint64 *sectionOffset, uint64 *sectionSize) {
+  elf_header ehdr = elf_loader.ehdr;
+  uint16 shstrndx = ehdr.shstrndx;
+  uint64 shoff = ehdr.shoff;
+  uint16 shentsize = ehdr.shentsize;
+  uint16 shnum = ehdr.shnum;
+
+  uint64 shstraddr = shoff + (uint64)shstrndx * shentsize;
+  uint64 shstrtab_offset ;//= *((uint64*)(shstraddr + 24));
+  uint64 shstrtab_size ;//= *((uint64*)(shstraddr + 32));
+  
+  struct elf_sect_header_t shstrtab;
+  elf_fpread(&elf_loader, &shstrtab, sizeof(struct elf_sect_header_t), shstraddr);
+  shstrtab_offset = shstrtab.offset;
+  shstrtab_size = shstrtab.size;
+  //elf_fpread(&elf_loader, &shstrtab_offset, 8, shstraddr + 24);
+  //elf_fpread(&elf_loader, &shstrtab_size, 8, shstraddr + 32);
+
+  char shstrTableBuf[shstrtab_size];//2000
+  //char *strTableBuf; //we implement malloc in lab2_2
+  // strTableBuf = (char *)malloc(strtab_size * sizeof(char));
+  // if (strTableBuf == NULL) {
+  //   panic("strTableBuf Memory allocation failed.\n");
+  // } 
+  elf_fpread(&elf_loader, shstrTableBuf, shstrtab_size, shstrtab_offset);
+
+  for(uint16 i = 0;i < shnum;++ i) {
+    uint64 sectionP = (shoff + (uint64)i * shentsize);
+    uint32 sh_name ;//= *((uint32*)sectionP);
+    struct elf_sect_header_t tmpSection;
+    elf_fpread(&elf_loader, &tmpSection, sizeof(struct elf_sect_header_t), sectionP);
+    sh_name = tmpSection.name;
+    //elf_fpread(&elf_loader, &sh_name, 4, sectionP);
+    char* sh_name_str = (char*)((uint64)shstrTableBuf + (uint64)sh_name);
+
+    if (strcmp(sh_name_str, sectionName) == 0) {
+      *sectionOffset = tmpSection.offset;
+      *sectionSize = tmpSection.size;
+      return;
+      // elf_fpread(&elf_loader, &aimSection_offset, 8, sectionP + 24);
+      // elf_fpread(&elf_loader, &aimSection_size, 8, sectionP + 32);
+//  sprint("offset = %lld size = %lld\n", aimSection_offset, aimSection_size);
+    }
+  }
+  //  aimSection_offset;
+  // aimSection_size;
+  panic("No corresponding section name : %s", sectionName);
+}
+
+elf_sect_header read_elf_section_header(elf_ctx *ctx, int idx) {
+  elf_sect_header sh;
+  elf_fpread(ctx, &sh, sizeof(elf_sect_header), ctx->ehdr.shoff + sizeof(elf_sect_header) * idx);
+  return sh;
+}
+
+void read_elf_into_buffer(elf_ctx *ctx, void *dst, int offset, int size) {
+  elf_fpread(ctx, dst, size, offset);
+}
+
+elf_sect_header read_elf_section_header_with_name(elf_ctx *ctx, const char *name) {
+
+  static int inited = 0;
+  static elf_sect_header shstrtab;
+  static char buf[1000];
+
+  if(!inited) {
+    shstrtab = read_elf_section_header(ctx, ctx->ehdr.shstrndx);
+    read_elf_into_buffer(ctx, buf, shstrtab.offset, shstrtab.size);
+    inited = 1;
+  }
+
+  elf_sect_header header;
+  for(int i = 0; i < ctx->ehdr.shnum; i++) {
+    header = read_elf_section_header(ctx, i);
+    if(0 == strcmp(buf + header.name, name)) {
+      return header;
+    }
+  }
+  panic("no corresponding section name");
+}
+
+void printErrorLine() {
+  uint64 debugLineOffset, debugLineSize;
+  getSectionByName(".debug_line", &debugLineOffset, &debugLineSize);//debugLineSize = 2122;
+  sprint("offset = %lld size = %lld\n", debugLineOffset, debugLineSize);
+  char content[3000];//3000 
+  elf_fpread(&elf_loader, content, debugLineSize, debugLineOffset);
+  make_addr_line(&elf_loader, content, debugLineSize); //panic("?!");
+  //sprint("%lx\n", read_csr(mepc));
+
+  for(size_t i = 0;i < current->line_ind;++ i) {
+    sprint("%d : %lx ---end-->", i, current->line[i].addr);
+    if (current->line[i].addr == read_csr(mepc)) {
+      uint64 line_number = current->line[i].line;
+      uint64 file_index = current->line[i].file;
+      char *file_name = current->file[file_index].file;
+      uint64 dir_index = current->file[file_index].dir;
+      char *dir_name = current->dir[dir_index];
+      sprint("Runtime error at %s/%s:%d\n", dir_name, file_name, line_number);
+      sprint("%s\n", dir_name); break;
+      //spike_file_t* spike_code_file = spike_file_open()
+    }
+  }
 }

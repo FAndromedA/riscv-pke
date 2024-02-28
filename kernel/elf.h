@@ -87,4 +87,7 @@ elf_status elf_load(elf_ctx *ctx);
 
 void load_bincode_from_host_elf(process *p);
 
+//added in lab1_challenge2
+void printErrorLine();
+
 #endif

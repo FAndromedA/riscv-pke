@@ -2,6 +2,9 @@
 #include "kernel/process.h"
 #include "spike_interface/spike_utils.h"
 
+//added in lab1_challenge2
+#include "kernel/elf.h"
+
 static void handle_instruction_access_fault() { panic("Instruction access fault!"); }
 
 static void handle_load_access_fault() { panic("Load access fault!"); }
@@ -45,6 +48,9 @@ void handle_mtrap() {
       // TODO (lab1_2): call handle_illegal_instruction to implement illegal instruction
       // interception, and finish lab1_2.
       //panic( "call handle_illegal_instruction to accomplish illegal instruction interception for lab1_2.\n" );
+      //**added in lab1_challenge2
+      printErrorLine();
+      //**
       handle_illegal_instruction();
 
       break;

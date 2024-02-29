@@ -289,7 +289,7 @@ void load_bincode_from_host_elf(process *p) {
 }
 
 //added in lab1_challenge2
-void getSectionByName(const char *sectionName, uint64 *sectionOffset, uint64 *sectionSize) {
+struct elf_sect_header_t getSectionByName(const char *sectionName) { 
   elf_header ehdr = elf_loader.ehdr;
   uint16 shstrndx = ehdr.shstrndx;
   uint64 shoff = ehdr.shoff;
@@ -306,8 +306,7 @@ void getSectionByName(const char *sectionName, uint64 *sectionOffset, uint64 *se
   shstrtab_size = shstrtab.size;
   //elf_fpread(&elf_loader, &shstrtab_offset, 8, shstraddr + 24);
   //elf_fpread(&elf_loader, &shstrtab_size, 8, shstraddr + 32);
-
-  char shstrTableBuf[shstrtab_size];//2000
+  char shstrTableBuf[2000];//2000
   //char *strTableBuf; //we implement malloc in lab2_2
   // strTableBuf = (char *)malloc(strtab_size * sizeof(char));
   // if (strTableBuf == NULL) {
@@ -325,9 +324,9 @@ void getSectionByName(const char *sectionName, uint64 *sectionOffset, uint64 *se
     char* sh_name_str = (char*)((uint64)shstrTableBuf + (uint64)sh_name);
 
     if (strcmp(sh_name_str, sectionName) == 0) {
-      *sectionOffset = tmpSection.offset;
-      *sectionSize = tmpSection.size;
-      return;
+      //*sectionOffset = tmpSection.offset;
+      //*sectionSize = tmpSection.size;
+      return tmpSection;
       // elf_fpread(&elf_loader, &aimSection_offset, 8, sectionP + 24);
       // elf_fpread(&elf_loader, &aimSection_size, 8, sectionP + 32);
 //  sprint("offset = %lld size = %lld\n", aimSection_offset, aimSection_size);
@@ -340,32 +339,35 @@ void getSectionByName(const char *sectionName, uint64 *sectionOffset, uint64 *se
 
 //added in lab1_challenge2
 void printErrorLine() {
-  uint64 debugLineOffset, debugLineSize;
-  getSectionByName(".debug_line", &debugLineOffset, &debugLineSize);//debugLineSize = 2122;
+  struct elf_sect_header_t dbg_line = getSectionByName(".debug_line");//debugLineSize = 2122;
+  uint64 debugLineOffset = dbg_line.offset, debugLineSize = dbg_line.size;
   //sprint("offset = %lld size = %lld\n", debugLineOffset, debugLineSize);
-  char content[3000];//3000 
+  static char content[8000];//3000  be aware of the static , process's three array is stroe right behind it
+  
   elf_fpread(&elf_loader, content, debugLineSize, debugLineOffset);
-  make_addr_line(&elf_loader, content, debugLineSize); //panic("?!");
-  //sprint("%lx\n", read_csr(mepc));
+  make_addr_line(&elf_loader, content, debugLineSize); 
+  //sprint("%lx\n", read_csr(mepc)); 
 
   for(size_t i = 0;i < current->line_ind;++ i) {
-    //sprint("%d : %lx ---end-->", i, current->line[i].addr);
+    //sprint("%d : %lx ---end-->", i, current->line[i].addr); 
     if (current->line[i].addr == read_csr(mepc)) {
       uint64 line_number = current->line[i].line;
       uint64 file_index = current->line[i].file;
       char *file_name = current->file[file_index].file;
       uint64 dir_index = current->file[file_index].dir;
       char *dir_name = current->dir[dir_index];
-      sprint("Runtime error at %s/%s:%d\n", dir_name, file_name, line_number);
+      sprint("Runtime error at %s/%s:%d\n", dir_name, file_name, line_number); 
       //sprint("%s\n", dir_name); 
-      char path[100]; int path_len = 0;
-      for(size_t i = 0;i < strlen(dir_name);++ i) {
-        path[path_len ++] = dir_name[i];
+      char path[100]; 
+      int path_len = 0; 
+      //sprint("%d\n", strlen(dir_name));sprint("%d\n", strlen(dir_name));//panic("0");
+      for(int i = 0;i < strlen(dir_name);++ i) {
+        path[path_len ++] = dir_name[i]; //sprint("?"); 
       }
       path[path_len ++] = '/';
-      for(size_t i = 0;i < strlen(file_name);++ i) {
+      for(int i = 0;i < strlen(file_name);++ i) {
         path[path_len ++] = file_name[i];
-      }
+      } 
       path[path_len] = '\0';
       spike_file_t* spike_code_file = spike_file_open(path, O_RDONLY, 0);
       int cur_line_no = 1;

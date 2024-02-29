@@ -39,21 +39,30 @@ ssize_t sys_user_exit(uint64 code) {
 //
 // maybe, the simplest implementation of malloc in the world ... added @lab2_2
 //
-uint64 sys_user_allocate_page() {
-  void* pa = alloc_page();
-  uint64 va = g_ufree_page;
-  g_ufree_page += PGSIZE;
-  user_vm_map((pagetable_t)current->pagetable, va, PGSIZE, (uint64)pa,
-         prot_to_type(PROT_WRITE | PROT_READ, 1));
+uint64 sys_user_allocate_page(int size) {
+  // when can't be store in a Block
+  // if (size > PGSIZE - sizeof(mBlock)) { // modified in lab2_challenge2
+  //   void* pa = alloc_page();
+  //   uint64 va = g_ufree_page;
+  //   g_ufree_page += PGSIZE;
+  //   user_vm_map((pagetable_t)current->pagetable, va, PGSIZE, (uint64)pa,
+  //         prot_to_type(PROT_WRITE | PROT_READ, 1));
 
-  return va;
+  //   return va;
+  // }
+  // when expected size is less than PGSIZE - sizeof(mBlock), implement better malloc
+  //else {
+      return alloc_in_block(size);
+  //}
+
 }
 
 //
 // reclaim a page, indicated by "va". added @lab2_2
 //
 uint64 sys_user_free_page(uint64 va) {
-  user_vm_unmap((pagetable_t)current->pagetable, va, PGSIZE, 1);
+  //user_vm_unmap((pagetable_t)current->pagetable, va, PGSIZE, 1);
+  free_in_block(va);
   return 0;
 }
 
@@ -69,7 +78,7 @@ long do_syscall(long a0, long a1, long a2, long a3, long a4, long a5, long a6, l
       return sys_user_exit(a1);
     // added @lab2_2
     case SYS_user_allocate_page:
-      return sys_user_allocate_page();
+      return sys_user_allocate_page(a1); // modified in lab2_challenge2
     case SYS_user_free_page:
       return sys_user_free_page(a1);
     default:

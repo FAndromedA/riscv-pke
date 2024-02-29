@@ -86,6 +86,8 @@ typedef struct process_t {
   struct process_t *parent;
   // next queue element
   struct process_t *queue_next;
+  // added in lab3_challenge2
+  struct process_t *sem_wl_next;
 
   // accounting. added @lab3_3
   int tick_count;
@@ -105,5 +107,11 @@ int do_fork(process* parent);
 
 // current running process
 extern process* current;
+
+//added in lab3_challenge2
+void sem_array_init();
+uint32 create_sem(int32 v);
+ssize_t do_sem_P(int32 sem_id);
+ssize_t do_sem_V(int32 sem_id);
 
 #endif

@@ -261,3 +261,57 @@ int do_fork( process* parent)
 
   return child->pid;
 }
+
+// added in lab3_challenge2
+#define NSEM 100
+#define SEM_FREE (-1 - NPROC)
+int32 sem_array[NSEM];
+process *sem_wl_head[NSEM]; // sem's waiting list
+
+void sem_array_init() {
+  for(size_t i = 0;i < NSEM;++ i)
+    sem_array[i] = SEM_FREE;
+}
+
+uint32 create_sem(int32 v) {
+  for(size_t i = 0;i < NSEM;++ i) {
+    if (sem_array[i] == SEM_FREE) {
+      sem_array[i] = v;
+      return i;
+    }
+  }
+  panic("Create semaphore failed!");
+  return -1;
+}
+
+ssize_t do_sem_P(int32 sem_id) {
+  if (sem_id < 0 || sem_array[sem_id] == SEM_FREE) {
+    panic("Invalid semaphore ID: %d when doing P operation", sem_id);
+    return -1;
+  }
+  sem_array[sem_id] --;
+  if (sem_array[sem_id] < 0) { 
+    // as we clear the list in V at once, there is no need to queue in order
+    if (sem_wl_head[sem_id] != NULL)
+      current->sem_wl_next = sem_wl_head[sem_id]->sem_wl_next;
+    else current->sem_wl_next = NULL;
+    sem_wl_head[sem_id] = current;
+    schedule();
+  }
+  return 0;
+}
+
+ssize_t do_sem_V(int32 sem_id) {
+  if (sem_id < 0 || sem_array[sem_id] == SEM_FREE) {
+    panic("Invalid semaphore ID: %d when doing V operation", sem_id);
+    return -1;
+  }
+  sem_array[sem_id] ++;
+  if (sem_array[sem_id] >= 0) {
+    while(sem_wl_head[sem_id] != NULL) {
+      insert_to_ready_queue(sem_wl_head[sem_id]);
+      sem_wl_head[sem_id] = sem_wl_head[sem_id]->sem_wl_next;
+    }
+  }
+  return 0;
+}

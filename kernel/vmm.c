@@ -34,7 +34,7 @@ int map_pages(pagetable_t page_dir, uint64 va, uint64 size, uint64 pa, int perm)
 
 //
 // convert permission code to permission types of PTE
-//
+// user 1 kernel 0
 uint64 prot_to_type(int prot, int user) {
   uint64 perm = 0;
   if (prot & PROT_READ) perm |= PTE_R | PTE_A;

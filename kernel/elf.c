@@ -8,6 +8,9 @@
 #include "riscv.h"
 #include "vmm.h"
 #include "pmm.h"
+#include "vfs.h"
+#include "hostfs.h"
+#include "memlayout.h"
 #include "spike_interface/spike_utils.h"
 
 typedef struct elf_info_t {
@@ -87,7 +90,7 @@ elf_status elf_load(elf_ctx *ctx) {
     int j;
     for( j=0; j<PGSIZE/sizeof(mapped_region); j++ ) //seek the last mapped region
       if( (process*)(((elf_info*)(ctx->info))->p)->mapped_info[j].va == 0x0 ) break;
-
+    //sprint("%d = %d\n", j, ((process*)(((elf_info*)(ctx->info))->p))->total_mapped_region);
     ((process*)(((elf_info*)(ctx->info))->p))->mapped_info[j].va = ph_addr.vaddr;
     ((process*)(((elf_info*)(ctx->info))->p))->mapped_info[j].npages = 1;
 
@@ -126,9 +129,11 @@ static size_t parse_args(arg_buf *arg_bug_msg) {
   uint64 *pk_argv = &arg_bug_msg->buf[1];
 
   int arg = 1;  // skip the PKE OS kernel string, leave behind only the application name
-  for (size_t i = 0; arg + i < pk_argc; i++)
+  for (size_t i = 0; arg + i < pk_argc; i++) {
+    // the args of spike ./obj/riscv-pke args...
     arg_bug_msg->argv[i] = (char *)(uintptr_t)pk_argv[arg + i];
-
+    //sprint("%s\n", arg_bug_msg->argv[i]);
+  }
   //returns the number of strings after PKE kernel in command line
   return pk_argc - arg;
 }
@@ -136,7 +141,44 @@ static size_t parse_args(arg_buf *arg_bug_msg) {
 //
 // load the elf of user application, by using the spike file interface.
 //
-void load_bincode_from_host_elf(process *p) {
+// void load_bincode_from_host_elf(process *p) {
+//   arg_buf arg_bug_msg;
+
+//   // retrieve command line arguements
+//   size_t argc = parse_args(&arg_bug_msg);
+//   if (!argc) panic("You need to specify the application program!\n");
+
+//   sprint("Application: %s\n", arg_bug_msg.argv[0]);
+
+//   //elf loading. elf_ctx is defined in kernel/elf.h, used to track the loading process.
+//   elf_ctx elfloader;
+//   // elf_info is defined above, used to tie the elf file and its corresponding process.
+//   elf_info info;
+
+//   info.f = spike_file_open(arg_bug_msg.argv[0], O_RDONLY, 0);
+//   info.p = p;
+//   // IS_ERR_VALUE is a macro defined in spike_interface/spike_htif.h
+//   if (IS_ERR_VALUE(info.f)) panic("Fail on openning the input application program.\n");
+
+//   // init elfloader context. elf_init() is defined above.
+//   if (elf_init(&elfloader, &info) != EL_OK)
+//     panic("fail to init elfloader.\n");
+
+//   // load elf. elf_load() is defined above.
+//   if (elf_load(&elfloader) != EL_OK) panic("Fail on loading elf.\n");
+
+//   // entry (virtual, also physical in lab1_x) address
+//   p->trapframe->epc = elfloader.ehdr.entry;
+
+//   // close the host spike file
+//   spike_file_close( info.f );
+
+//   sprint("Application program entry point (virtual address): 0x%lx\n", p->trapframe->epc);
+// }
+
+// added in lab4_challenge2
+// modify only to fit the educoder's test
+void load_bincode_from_vfs_elf(process *p) {
   arg_buf arg_bug_msg;
 
   // retrieve command line arguements
@@ -150,7 +192,11 @@ void load_bincode_from_host_elf(process *p) {
   // elf_info is defined above, used to tie the elf file and its corresponding process.
   elf_info info;
 
-  info.f = spike_file_open(arg_bug_msg.argv[0], O_RDONLY, 0);
+  struct file *elf_vf = vfs_open(arg_bug_msg.argv[0], O_RDONLY);
+  if (hostfs_hook_open(elf_vf->f_dentry->dentry_inode, elf_vf->f_dentry) == -1) 
+    panic("hostfs_hook_open cannot open the given file.\n");
+  
+  info.f = elf_vf->f_dentry->dentry_inode->i_fs_info;
   info.p = p;
   // IS_ERR_VALUE is a macro defined in spike_interface/spike_htif.h
   if (IS_ERR_VALUE(info.f)) panic("Fail on openning the input application program.\n");
@@ -165,8 +211,143 @@ void load_bincode_from_host_elf(process *p) {
   // entry (virtual, also physical in lab1_x) address
   p->trapframe->epc = elfloader.ehdr.entry;
 
-  // close the host spike file
-  spike_file_close( info.f );
+  // close the file
+  hostfs_hook_close(elf_vf->f_dentry->dentry_inode, elf_vf->f_dentry);
+  vfs_close(elf_vf);
 
   sprint("Application program entry point (virtual address): 0x%lx\n", p->trapframe->epc);
+}
+
+// added in lab4_challenge2
+// substitute the segment of process
+elf_status elf_substitute(elf_ctx *ctx) {
+  // structure of program segment header
+  elf_prog_header ph_addr; 
+  size_t i; 
+  uint64 off;
+  process *cur = ((elf_info*)ctx->info)->p;
+  // traverse the elf program segment headers
+  // said in elf_alloc_mb :
+  // we assume that size of proram segment is smaller than a page
+  
+  for (i = 0, off = ctx->ehdr.phoff; i < ctx->ehdr.phnum; ++ i, off += sizeof(ph_addr)) {
+    // read segment headers
+    if (elf_fpread(ctx, (void *)&ph_addr, sizeof(ph_addr), off) != sizeof(ph_addr))
+      return EL_EIO;
+    if (ph_addr.type != ELF_PROG_LOAD) continue;
+    if (ph_addr.memsz < ph_addr.filesz) return EL_ERR;
+    if (ph_addr.vaddr + ph_addr.memsz < ph_addr.vaddr) return EL_ERR;
+
+    if (ph_addr.flags == (SEGMENT_READABLE | SEGMENT_EXECUTABLE)) {
+      // CODE_SEGMENT
+      for(size_t j = 0;j < cur->total_mapped_region;++ j) {
+        if (cur->mapped_info[j].seg_type == CODE_SEGMENT) {
+          // replace the previous one
+          // first unmap then you can map the new one
+          user_vm_unmap(cur->pagetable, cur->mapped_info[j].va, PGSIZE, 1);
+          void *dest = elf_alloc_mb(ctx, ph_addr.vaddr, ph_addr.vaddr, ph_addr.memsz);
+          // already allocate in the elf_alloc_mb function
+          //user_vm_map(cur->pagetable, ph_addr.vaddr, PGSIZE, dest, prot_to_type(PROT_EXEC|PROT_READ, 1));
+          if (elf_fpread(ctx, dest, ph_addr.memsz, ph_addr.off) != ph_addr.memsz)
+            return EL_EIO;
+          
+          cur->mapped_info[j].va = ph_addr.vaddr;
+          cur->mapped_info[j].npages = 1;
+          sprint( "CODE_SEGMENT added at mapped info offset:%d\n", j );
+          break;
+        }
+      }
+    }
+    else if (ph_addr.flags == (SEGMENT_READABLE | SEGMENT_WRITABLE)) {
+      // DATA_SEGMENT
+      bool found = 0;
+      for(size_t j = 0;j < cur->total_mapped_region;++ j) {
+        if (cur->mapped_info[j].seg_type == DATA_SEGMENT) {
+          // replace the previous one
+          // first unmap then you can map the new one
+          user_vm_unmap(cur->pagetable, cur->mapped_info[j].va, PGSIZE, 1);
+          void *dest = elf_alloc_mb(ctx, ph_addr.vaddr, ph_addr.vaddr, ph_addr.memsz);
+          // already allocate in the elf_alloc_mb function
+          //user_vm_map(cur->pagetable, ph_addr.vaddr, PGSIZE, dest, prot_to_type(PROT_WRITE|PROT_READ, 1));
+          if (elf_fpread(ctx, dest, ph_addr.memsz, ph_addr.off) != ph_addr.memsz)
+            return EL_EIO;
+          
+          cur->mapped_info[j].va = ph_addr.vaddr;
+          cur->mapped_info[j].npages = 1;
+          sprint( "DATA_SEGMENT added at mapped info offset:%d\n", j );
+          found = 1;
+          break;
+        }
+      }
+      // data_segment might not exist before
+      if (!found) {
+        // not found, then create a new one
+        size_t j = ++ cur->total_mapped_region;
+        void *dest = elf_alloc_mb(ctx, ph_addr.vaddr, ph_addr.vaddr, ph_addr.memsz);
+        if (elf_fpread(ctx, dest, ph_addr.memsz, ph_addr.off) != ph_addr.memsz)
+            return EL_EIO;
+        
+        cur->mapped_info[j].va = ph_addr.vaddr;
+        cur->mapped_info[j].npages = 1;
+        cur->mapped_info[j].seg_type = DATA_SEGMENT;
+        sprint( "DATA_SEGMENT added at mapped info offset:%d\n", j);
+      }
+    }
+    else {
+      panic( "unknown program segment encountered, segment flag:%d.\n", ph_addr.flags );
+    }
+  }
+  // clear the stack_segment and heap_segment
+  for(size_t i = 0;i < cur->total_mapped_region;++ i) {
+    if (cur->mapped_info[i].seg_type == STACK_SEGMENT) {
+      cur->trapframe->regs.sp = USER_STACK_TOP; // assume only one page
+    }
+    else if (cur->mapped_info[i].seg_type == HEAP_SEGMENT) {
+      for(uint64 j = cur->user_heap.heap_bottom;j < cur->user_heap.heap_top;j += PGSIZE) {
+        user_vm_unmap(cur->pagetable, j, PGSIZE, 1);
+      }
+      cur->mapped_info[i].npages = 0;
+      cur->user_heap.free_pages_count = 0;
+      cur->mapped_info[i].va = USER_FREE_ADDRESS_START;
+      cur->user_heap.heap_top = USER_FREE_ADDRESS_START;
+      cur->user_heap.heap_bottom = USER_FREE_ADDRESS_START;
+    }
+  }
+  return EL_OK;
+}
+
+// substitute bincode from elf to switch the executale
+// @param p current process
+// @param path path of virtual file system
+int32 switch_executable(process *p, char *path) {
+  elf_ctx elfloader; sprint("%s\n", path);
+  elf_info info;
+  struct file *elf_vf = vfs_open(path, O_RDONLY); 
+  if (hostfs_hook_open(elf_vf->f_dentry->dentry_inode, elf_vf->f_dentry) == -1) {
+    //panic("hostfs_hook_open cannot open the given file.\n");
+    return -1;
+  }
+  info.f = elf_vf->f_dentry->dentry_inode->i_fs_info;
+  info.p = p;
+  if (IS_ERR_VALUE(info.f)) {
+    // panic("Fail on openning the input application program.\n");
+    return -1;
+  }
+  
+  if (elf_init(&elfloader, &info) != EL_OK) {
+    sprint("fail to init elfloader.\n");
+    return -1;
+  }
+  if (elf_substitute(&elfloader) != EL_OK) {
+    sprint("fail to substitute process's segment");
+    return -1;
+  }
+  // the entry of the new program
+  p->trapframe->epc = elfloader.ehdr.entry;
+  // close the file
+  hostfs_hook_close(elf_vf->f_dentry->dentry_inode, elf_vf->f_dentry);
+  vfs_close(elf_vf);
+
+  sprint("Application program entry point (virtual address): 0x%lx\n", p->trapframe->epc);
+  return 0;
 }

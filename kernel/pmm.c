@@ -59,7 +59,7 @@ void free_page(void *pa) {
 void *alloc_page(void) {
   sync_spinlock_lock(&alloc_free_lock);
   list_node *n = g_free_mem_list.next;
-  uint64 hartid = 0;
+  uint64 hartid = read_tp();
   if (vm_alloc_stage[hartid]) {
     sprint("hartid = %ld: alloc page 0x%x\n", hartid, n);
   }

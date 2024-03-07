@@ -273,8 +273,6 @@ int do_fork( process* parent)
 
         // copy the heap manager from parent to child
         memcpy((void*)&child->user_heap, (void*)&parent->user_heap, sizeof(parent->user_heap)); 
-        parent->user_heap.ref_cnt ++;
-        child->user_heap.not_copied = 1;
         break;
       }
       case CODE_SEGMENT: {

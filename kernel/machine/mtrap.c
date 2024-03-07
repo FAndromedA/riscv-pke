@@ -52,7 +52,6 @@ void handle_mtrap() {
       handle_misaligned_load();
       break;
     case CAUSE_MISALIGNED_STORE:
-      // added in lab3_challenge3
       handle_misaligned_store();
       break;
 

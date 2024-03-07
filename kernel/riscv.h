@@ -198,6 +198,9 @@ static inline void flush_tlb(void) { asm volatile("sfence.vma zero, zero"); }
 #define PTE_G (1L << 5)  // global
 #define PTE_A (1L << 6)  // accessed
 #define PTE_D (1L << 7)  // dirty
+// we can see from the below function PA2PTE() that there are 10 bit for PTE_signal
+#define PTE_COW_p (1L << 8) // used for copy on write's parent
+#define PTE_COW_c (1L << 9) // used for copy on write's child
 
 // shift a physical address to the right place for a PTE.
 #define PA2PTE(pa) ((((uint64)pa) >> 12) << 10)

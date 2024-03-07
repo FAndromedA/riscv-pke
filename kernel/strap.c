@@ -57,7 +57,7 @@ void handle_mtimer_trap() {
 // stval: the virtual address that causes pagefault when being accessed.
 //
 void handle_user_page_fault(uint64 mcause, uint64 sepc, uint64 stval) {
-  sprint("handle_page_fault: %lx\n", stval);
+  sprint("handle_page_fault: %lx\n", stval);// %x, mcause
   switch (mcause) {
     case CAUSE_STORE_PAGE_FAULT:
       // TODO (lab2_3): implement the operations that solve the page fault to
@@ -74,15 +74,15 @@ void handle_user_page_fault(uint64 mcause, uint64 sepc, uint64 stval) {
             pagetable_t pa = (pagetable_t)alloc_page();
             map_pages(current->pagetable, ROUNDDOWN(stval, PGSIZE), PGSIZE, (uint64)pa, prot_to_type(PROT_WRITE | PROT_READ, 1));
             //sepc += 4;
-            break;
           }
-          else if (*pte & PTE_COW_c) {
+          else if (*pte & PTE_COW_c) { // added in lab3_challenge3
             child_copy_heap(current, ROUNDDOWN(stval, PGSIZE));
           }
           else if (*pte & PTE_COW_p) {
             parent_copy_heap(current, ROUNDDOWN(stval, PGSIZE));
           }
           else panic("Unknown Page Fault");
+          break;
         }
       //}
       

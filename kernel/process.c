@@ -168,6 +168,7 @@ int free_process( process* proc ) {
   return 0;
 }
 
+// added in lab3_challenge3
 void child_copy_heap(process* child, uint64 va) {
   uint64 pre_pa = lookup_pa(child->pagetable, va);
   user_vm_unmap(child->pagetable, va, PGSIZE, 0);
@@ -176,6 +177,7 @@ void child_copy_heap(process* child, uint64 va) {
   user_vm_map(child->pagetable, va, PGSIZE, (uint64)new_pa, prot_to_type(PROT_READ | PROT_WRITE, 1));
 }
 
+// added in lab3_challenge3
 void parent_copy_heap(process* parent, uint64 va) {
   uint64 parent_pa = lookup_pa(parent->pagetable, va);
   for(size_t i = 0;i < NPROC;++ i) {
@@ -247,6 +249,7 @@ int do_fork( process* parent)
           // break;
         
         // copy and map the heap blocks but use COW
+        // added in lab3_challenge3
         for (uint64 heap_block = current->user_heap.heap_bottom;
              heap_block < current->user_heap.heap_top; heap_block += PGSIZE) {
           if (free_block_filter[(heap_block - heap_bottom) / PGSIZE])  // skip free blocks
@@ -265,6 +268,8 @@ int do_fork( process* parent)
           
           user_vm_map((pagetable_t)child->pagetable, heap_block, PGSIZE, parent_pa,
                       prot_to_type(PROT_READ, 1)); // READ_ONLY
+          // copy on write, the child also map to parent_pa 
+          // *instead of* alloc a new page and copy to it
           pte_t *child_pte = page_walk(child->pagetable, heap_block, 0);
           *child_pte |= PTE_COW_c;
         }
@@ -302,6 +307,7 @@ int do_fork( process* parent)
           parent->mapped_info[i].npages;
         child->mapped_info[child->total_mapped_region].seg_type = CODE_SEGMENT;
         child->total_mapped_region++;
+        sprint("do_fork map code segment at pa:%lx of parent to child at va:%lx.\n",lookup_pa(parent->pagetable, va_parent), va_parent);
         break;
       }
     }

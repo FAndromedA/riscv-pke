@@ -35,6 +35,6 @@ int unlink_u(const char *fn);
 
 // added in lab4_challenge3
 void wait(int pid);
-int exec(char *command, char *para);
+int exec(const char *command, const char *para);
 
 #endif

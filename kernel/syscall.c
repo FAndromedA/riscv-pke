@@ -12,6 +12,7 @@
 #include "util/functions.h"
 #include "pmm.h"
 #include "vmm.h"
+#include "elf.h"
 #include "sched.h"
 #include "proc_file.h"
 
@@ -239,6 +240,26 @@ ssize_t sys_user_wait(int pid) {
 ssize_t sys_user_exec(char *v_command, char *v_para) {
   char *command = (char *)user_va_to_pa((pagetable_t)(current->pagetable), (void *)v_command);
   char *para = (char *)user_va_to_pa((pagetable_t)(current->pagetable), v_para);
+  sprint("command: %s, params: %s\n",command, para);
+  char temp_para[100]; 
+  // stroe in the kernel stack, or the para pyhsics page will be fee after switch_exec
+  strcpy(temp_para, para); // cant use memcpy because para is pointer, sizeof(para) is 8
+  sprint("%s\n", temp_para);
+  uint64 exit_code = 0;
+  exit_code = switch_executable(current, command); 
+  // argc : int ; argv : char** ;
+  // uint64 argc_va = sys_user_allocate_page();
+  uint64 argv_va = sys_user_allocate_page();
+  uint64 para_va = sys_user_allocate_page();
+  // uint64 argc_pa = user(current->pagetable, argc_va);
+  uint64 argv_pa = (uint64)user_va_to_pa(current->pagetable, (void *)argv_va);
+  uint64 para_pa = (uint64)user_va_to_pa(current->pagetable, (void *)para_va);
+  strcpy((char *)para_pa, (char *)temp_para);
+  // *((int*)argc_pa) = 1;
+  ((char **)argv_pa)[0] = (char *)para_va;
+  current->trapframe->regs.a0 = 1; // argc of the new program's main
+  current->trapframe->regs.a1 = argv_va; // argv of the new program's main
+  return exit_code;
 }
 
 //
@@ -265,7 +286,7 @@ long do_syscall(long a0, long a1, long a2, long a3, long a4, long a5, long a6, l
       return sys_user_open((char *)a1, a2);
     case SYS_user_read:
       return sys_user_read(a1, (char *)a2, a3);
-    case SYS_user_write:
+    case SYS_user_write: 
       return sys_user_write(a1, (char *)a2, a3);
     case SYS_user_lseek:
       return sys_user_lseek(a1, a2, a3);
@@ -291,8 +312,12 @@ long do_syscall(long a0, long a1, long a2, long a3, long a4, long a5, long a6, l
       return sys_user_unlink((char *)a1);
     case SYS_user_wait:
       return sys_user_wait(a1);
-    case SYS_user_exec:
-      return sys_user_exec((char *)a1, (char *)a2);
+    case SYS_user_exec: {
+      uint64 tmp_ret = sys_user_exec((char *)a1, (char *)a2);
+      //uint64 pid = current->pid; // convient for debug
+      //if (pid == 4) panic("s@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@s");
+      return tmp_ret;
+    }
     default:
       panic("Unknown syscall %ld \n", a0);
   }

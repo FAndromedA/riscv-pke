@@ -77,7 +77,7 @@ void handle_user_page_fault(uint64 mcause, uint64 sepc, uint64 stval) {
       //}
       
     default:
-      sprint("unknown page fault.\n");
+      sprint("unknown page fault.\n"); panic("a");
       break;
   }
 }

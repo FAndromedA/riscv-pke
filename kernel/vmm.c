@@ -25,6 +25,7 @@ int map_pages(pagetable_t page_dir, uint64 va, uint64 size, uint64 pa, int perm)
   for (first = ROUNDDOWN(va, PGSIZE), last = ROUNDDOWN(va + size - 1, PGSIZE);
       first <= last; first += PGSIZE, pa += PGSIZE) {
     if ((pte = page_walk(page_dir, first, 1)) == 0) return -1;
+    //sprint("first: %lx last:%lx pa:%lx\n", first, last, pa);
     if (*pte & PTE_V)
       panic("map_pages fails on mapping va (0x%lx) to pa (0x%lx)", first, pa);
     *pte = PA2PTE(pa) | perm | PTE_V;
@@ -190,18 +191,24 @@ void user_vm_unmap(pagetable_t page_dir, uint64 va, uint64 size, int free) {
   // to make user/app_naive_malloc to behave correctly.
   // panic( "You have to implement user_vm_unmap to free pages using naive_free in lab2_2.\n" );
   
-  pte_t* pte = page_walk(page_dir, va, 0);
-  if (pte != NULL) {
-    void *pa = (void *)PTE2PA((uint64)*pte);
-    //void* pa = user_va_to_pa(pte_va, (void*)va);
-    if (free) {
-      free_page(pa);
-      //naive_free((void *)va);
-      //*pte_va = 0;
-      //*pte &= ~PTE_V; // set PTE_V = 0
-      *pte = PA2PTE(pa) & ~PTE_V;
+  // modified in lab4_challenge3
+  // as you can find in user_vm_map,
+  // some va might map to two physics pages
+  // so we should free like user_vm_map()
+  uint64 first, last;
+  for(first = ROUNDDOWN(va, PGSIZE), last = ROUNDDOWN(va + size - 1, PGSIZE); first <= last; first += PGSIZE) {
+    pte_t* pte = page_walk(page_dir, first, 0);
+    if (pte != NULL) {
+      void *pa = (void *)PTE2PA((uint64)*pte);
+      //void* pa = user_va_to_pa(pte_va, (void*)va);
+      *pte &= ~PTE_V; // set PTE_V = 0
+      if (free) {
+        free_page(pa);
+        //naive_free((void *)va);
+        //*pte_va = 0;
+        //*pte = PA2PTE(pa) & ~PTE_V;
+      }
     }
-    
   }
 }
 

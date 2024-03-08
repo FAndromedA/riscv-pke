@@ -255,6 +255,19 @@ int do_fork( process* parent)
         child->total_mapped_region++;
         break;
       }
+      case DATA_SEGMENT: {
+        uint64 perm = prot_to_type(PROT_WRITE | PROT_READ, 1);
+        for(int j = 0;j < parent->mapped_info[i].npages;++ j) {
+          void* pa = alloc_page();
+          memcpy(pa, (void*)lookup_pa(parent->pagetable, parent->mapped_info[i].va + j * PGSIZE), PGSIZE);
+          map_pages(child->pagetable, parent->mapped_info[i].va + j * PGSIZE, PGSIZE, (uint64)pa, perm);
+        }
+        child->mapped_info[child->total_mapped_region].va = parent->mapped_info[i].va;
+        child->mapped_info[child->total_mapped_region].npages = parent->mapped_info[i].npages;
+        child->mapped_info[child->total_mapped_region].seg_type = DATA_SEGMENT;
+        child->total_mapped_region ++;
+        break;
+      }
     }
   }
 
@@ -264,4 +277,30 @@ int do_fork( process* parent)
   insert_to_ready_queue( child );
 
   return child->pid;
+}
+
+// added in lab4_challenge3 the same as lab3_challenge1
+int do_wait(int pid) {
+  if (pid < -1 || pid >= NPROC || pid == 0 || (pid != -1 && procs[pid].parent->pid != current->pid)) {
+    return -1;
+  }
+
+  if (pid == -1) { // waiting for any pid
+    for(int i = 0;i < NPROC;++ i) {
+      if (procs[i].parent == NULL) continue;
+      if (procs[i].parent->pid == current->pid && (procs[i].status != FREE || procs[i].status != ZOMBIE)) { // exist at least one son 
+        current->status = BLOCKED;
+        current->trapframe->regs.a0 = -1; 
+        // 临时存父进程等待的谁，被唤醒时修改为唤醒它的子进程pid，在被唤醒后直接赋给do_user_call的ret
+        return 0;
+      }
+    }
+    return -1;
+  }
+  if (pid > 0 && pid < NPROC) { // waiting for the specific pid
+    current->status = BLOCKED;
+    current->trapframe->regs.a0 = pid; //临时存父进程等待的谁，这里一定是子进程pid唤醒的 
+    return 0;
+  }
+  return -1;
 }

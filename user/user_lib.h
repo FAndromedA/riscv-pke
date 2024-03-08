@@ -33,5 +33,8 @@ int closedir_u(int fd);
 int link_u(const char *fn1, const char *fn2);
 int unlink_u(const char *fn);
 
+// added in lab4_challenge3
+void wait(int pid);
+int exec(char *command, char *para);
 
 #endif

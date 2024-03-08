@@ -106,7 +106,8 @@ process* alloc_process();
 int free_process( process* proc );
 // fork a child from parent
 int do_fork(process* parent);
-
+// added in lab4_challenge3 the same as lab3_challenge1
+int do_wait(int pid);
 // current running process
 extern process* current;
 

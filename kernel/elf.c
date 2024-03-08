@@ -28,7 +28,7 @@ static void *elf_alloc_mb(elf_ctx *ctx, uint64 elf_pa, uint64 elf_va, uint64 siz
   void *pa = alloc_page();
   if (pa == 0) panic("uvmalloc mem alloc falied\n");
 
-  //memset((void *)pa, 0, PGSIZE);
+  //memset((void *)pa, 0, PGSIZE); don't know why
   user_vm_map((pagetable_t)msg->p->pagetable, elf_va, PGSIZE, (uint64)pa,
          prot_to_type(PROT_WRITE | PROT_READ | PROT_EXEC, 1));
 

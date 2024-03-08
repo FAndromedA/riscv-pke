@@ -240,11 +240,11 @@ ssize_t sys_user_wait(int pid) {
 ssize_t sys_user_exec(char *v_command, char *v_para) {
   char *command = (char *)user_va_to_pa((pagetable_t)(current->pagetable), (void *)v_command);
   char *para = (char *)user_va_to_pa((pagetable_t)(current->pagetable), v_para);
-  sprint("command: %s, params: %s\n",command, para);
+  //sprint("command: %s, params: %s\n",command, para);
   char temp_para[100]; 
   // stroe in the kernel stack, or the para pyhsics page will be fee after switch_exec
   strcpy(temp_para, para); // cant use memcpy because para is pointer, sizeof(para) is 8
-  sprint("%s\n", temp_para);
+  //sprint("%s\n", temp_para);
   uint64 exit_code = 0;
   exit_code = switch_executable(current, command); 
   // argc : int ; argv : char** ;
